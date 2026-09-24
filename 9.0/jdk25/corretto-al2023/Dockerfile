@@ -1,9 +1,10 @@
-{{
-	include "from"
-	;
-	include "shared"
--}}
-FROM {{ from }}
+#
+# NOTE: THIS DOCKERFILE IS GENERATED VIA "apply-templates.sh"
+#
+# PLEASE DO NOT EDIT IT DIRECTLY.
+#
+
+FROM amazoncorretto:25-al2023-jdk
 
 ENV CATALINA_HOME /usr/local/tomcat
 ENV PATH $CATALINA_HOME/bin:$PATH
@@ -14,22 +15,12 @@ WORKDIR $CATALINA_HOME
 ENV TOMCAT_NATIVE_LIBDIR $CATALINA_HOME/native-jni-lib
 ENV LD_LIBRARY_PATH ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
 
-ENV TOMCAT_MAJOR {{ major }}
-ENV TOMCAT_VERSION {{ .version }}
-ENV TOMCAT_SHA512 {{ .sha512 }}
+ENV TOMCAT_MAJOR 9
+ENV TOMCAT_VERSION 9.0.122
+ENV TOMCAT_SHA512 1f2f7d822a407999d954e7eb4fb1e78998c2a9372bb466d27e8cefd2521ef779183744f39dfa50a77ce3b798e7fe30bf2fd43fd1d6a2e6135617af1ddda6ba2a
 
-{{ if java_variant == "jdk" then ( -}}
 RUN set -eux; \
 	\
-{{ if is_apt then ( -}}
-	savedAptMark="$(apt-mark showmanual)"; \
-	apt-get update; \
-	apt-get install -y --no-install-recommends \
-		ca-certificates \
-		curl \
-		gnupg \
-	; \
-{{ ) else ( -}}
 # a helper function to "dnf install" things, but only if they aren't installed (and to mark them as a dependency so "dnf autoremove" can purge them for us)
 	_dnf_install_temporary() { ( set -eu +x; \
 		local pkg todo=''; \
@@ -45,7 +36,6 @@ RUN set -eux; \
 		fi; \
 	) }; \
 	_dnf_install_temporary findutils gzip tar; \
-{{ ) end -}}
 	\
 	ddist() { \
 		local f="$1"; shift; \
@@ -73,70 +63,29 @@ RUN set -eux; \
 	echo "$TOMCAT_SHA512 *tomcat.tar.gz" | sha512sum --strict --check -; \
 	ddist 'tomcat.tar.gz.asc' "tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz.asc" "$TOMCAT_VERSION/tomcat-$TOMCAT_VERSION.tar.gz.asc"; \
 	GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; \
-{{ if is_apt then "" else ( -}}
 # Amazon Linux 2023 ships "gnupg2-minimal" which does not include "gpg-agent" (and "gpg" fails if it cannot autostart it)
 	echo 'no-autostart' >> "$GNUPGHOME/gpg.conf"; \
-{{ ) end -}}
-	curl -fL -o upstream-KEYS {{ "https://www.apache.org/dist/tomcat/tomcat-\(major)/KEYS" | @sh }}; \
+	curl -fL -o upstream-KEYS 'https://www.apache.org/dist/tomcat/tomcat-9/KEYS'; \
 	gpg --batch --import upstream-KEYS; \
 # filter upstream KEYS file to *just* known/precomputed fingerprints
 	printf '' > filtered-KEYS; \
-# see https://www.apache.org/dist/tomcat/tomcat-{{ major }}/KEYS
+# see https://www.apache.org/dist/tomcat/tomcat-9/KEYS
 	for key in \
-{{
-	# docker run --rm buildpack-deps:bookworm-curl bash -c 'wget -qO- https://www.apache.org/dist/tomcat/tomcat-11/KEYS | gpg --batch --import &> /dev/null && gpg --batch --list-keys --with-fingerprint --with-colons' | awk -F: '$1 == "pub" && $2 == "-" { pub = 1 } pub && $1 == "fpr" { fpr = $10 } $1 == "sub" { pub = 0 } pub && fpr && $1 == "uid" && $2 == "-" { print "\t\t\t#", $10; print "\t\t\t\"" fpr "\","; pub = 0 } END { print "\t\t\t# trailing comma 👀\n\t\t\tempty" }'
-	{
-		"11": [
-			# Mark E D Thomas <markt@apache.org>
-			"A9C5DF4D22E99998D9875A5110C01C5A2F6059E7",
-			# Remy Maucherat <remm@apache.org>
-			"48F8E69F6390C9F25CFEDCD268248959359E722B",
-			# trailing comma 👀
-			empty
-		],
-		"10": [
-			# Mark E D Thomas <markt@apache.org>
-			"A9C5DF4D22E99998D9875A5110C01C5A2F6059E7",
-			# Christopher Schultz <chris@christopherschultz.net>
-			"5C3C5F3E314C866292F359A8F3AD5C94A67F707E",
-			# trailing comma 👀
-			empty
-		],
-		"9": [
-			# Mark E D Thomas <markt@apache.org>
-			"DCFD35E0BF8CA7344752DE8B6FB21E8933C60243",
-			# Mark E D Thomas <markt@apache.org>
-			"A9C5DF4D22E99998D9875A5110C01C5A2F6059E7",
-			# Remy Maucherat <remm@apache.org>
-			"48F8E69F6390C9F25CFEDCD268248959359E722B",
-			# trailing comma 👀
-			empty
-		],
-	} | .[major] // error("missing GPG keys")
-	| map(
--}}
-		{{ @sh }} \
-{{ ) | add -}}
+		'DCFD35E0BF8CA7344752DE8B6FB21E8933C60243' \
+		'A9C5DF4D22E99998D9875A5110C01C5A2F6059E7' \
+		'48F8E69F6390C9F25CFEDCD268248959359E722B' \
 	; do \
 		gpg --batch --fingerprint "$key"; \
 		gpg --batch --export --armor "$key" >> filtered-KEYS; \
 	done; \
-{{ if vendor_variant | contains("al2") then "" else ( -}}
-	gpgconf --kill all; \
-{{ ) end -}}
 	rm -rf "$GNUPGHOME"; \
 	GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; \
-{{ if is_apt then "" else ( -}}
 	echo 'no-autostart' >> "$GNUPGHOME/gpg.conf"; \
-{{ ) end -}}
 	gpg --batch --import filtered-KEYS; \
 	gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz; \
 	tar -xf tomcat.tar.gz --strip-components=1; \
 	rm bin/*.bat; \
 	rm tomcat.tar.gz*; \
-{{ if vendor_variant | contains("al2") then "" else ( -}}
-	gpgconf --kill all; \
-{{ ) end -}}
 	rm -rf "$GNUPGHOME"; \
 	\
 # https://tomcat.apache.org/tomcat-9.0-doc/security-howto.html#Default_web_applications
@@ -146,40 +95,22 @@ RUN set -eux; \
 	\
 	nativeBuildDir="$(mktemp -d)"; \
 	tar -xf bin/tomcat-native.tar.gz -C "$nativeBuildDir" --strip-components=1; \
-{{ if is_apt then ( -}}
-	apt-get install -y --no-install-recommends \
-		dpkg-dev \
-		gcc \
-		libapr1-dev \
-		libssl-dev \
-		make \
-	; \
-{{ ) else ( -}}
 	_dnf_install_temporary \
 		apr-devel \
 		gcc \
 		make \
 		openssl-devel \
 	; \
-{{ ) end -}}
 	( \
 		export CATALINA_HOME="$PWD"; \
 		cd "$nativeBuildDir/native"; \
-{{ if is_apt then ( -}}
-		gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
-{{ ) else "" end -}}
 		aprConfig="$(command -v apr-1-config)"; \
 		./configure \
-{{ if is_apt then ( -}}
-			--build="$gnuArch" \
-{{ ) else "" end -}}
 			--libdir="$TOMCAT_NATIVE_LIBDIR" \
 			--prefix="$CATALINA_HOME" \
 			--with-apr="$aprConfig" \
 			--with-java-home="$JAVA_HOME" \
-{{ if is_native_ge_2 then "" else ( -}}
 			--with-ssl \
-{{ ) end -}}
 		; \
 		nproc="$(nproc)"; \
 		make -j "$nproc"; \
@@ -188,24 +119,6 @@ RUN set -eux; \
 	rm -rf "$nativeBuildDir"; \
 	rm bin/tomcat-native.tar.gz; \
 	\
-{{ if is_apt then ( -}}
-# reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
-	apt-mark auto '.*' > /dev/null; \
-	[ -z "$savedAptMark" ] || apt-mark manual $savedAptMark > /dev/null; \
-	find "$TOMCAT_NATIVE_LIBDIR" -type f -executable -exec ldd '{}' ';' \
-		| awk '/=>/ { print $(NF-1) }' \
-		| xargs -rt readlink -e \
-		| sort -u \
-		| xargs -rt dpkg-query --search \
-		| cut -d: -f1 \
-		| sort -u \
-		| tee "$TOMCAT_NATIVE_LIBDIR/.dependencies.txt" \
-		| xargs -r apt-mark manual \
-	; \
-	\
-	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
-	rm -rf /var/lib/apt/lists/*; \
-{{ ) else ( -}}
 # mark any explicit dependencies as manually installed
 	find "$TOMCAT_NATIVE_LIBDIR" -type f -executable -exec ldd '{}' ';' \
 		| awk '/=>/ && $(NF-1) != "=>" { print $(NF-1) }' \
@@ -226,14 +139,7 @@ RUN set -eux; \
 	dnf autoremove -y; \
 	dnf clean all; \
 	rm -rf /var/cache/dnf; \
-{{ ) end -}}
 	\
-{{ if is_apt then ( -}}
-# sh removes env vars it doesn't support (ones with periods)
-# https://github.com/docker-library/tomcat/issues/77
-	find ./bin/ -name '*.sh' -exec sed -ri 's|^#!/bin/sh$|#!/usr/bin/env bash|' '{}' +; \
-	\
-{{ ) else "" end -}}
 # fix permissions (especially for running as non-root)
 # https://github.com/docker-library/tomcat/issues/35
 	chmod -R +rX .; \
@@ -241,23 +147,6 @@ RUN set -eux; \
 	\
 # smoke test
 	catalina.sh version
-{{ ) else ( -}}
-COPY --from=tomcat:{{ .version }}-jdk{{ java_version }}-{{ vendor_variant }} $CATALINA_HOME $CATALINA_HOME
-RUN set -eux; \
-{{ if is_apt then ( -}}
-	apt-get update; \
-	xargs -rt apt-get install -y --no-install-recommends < "$TOMCAT_NATIVE_LIBDIR/.dependencies.txt"; \
-	rm -rf /var/lib/apt/lists/*
-{{ ) else ( -}}
-# "xargs" is not available (no "findutils"), so we use plain shell word splitting instead
-	deps="$(cat "$TOMCAT_NATIVE_LIBDIR/.dependencies.txt")"; \
-	if [ -n "$deps" ]; then \
-		dnf install -y --setopt=skip_missing_names_on_install=False $deps; \
-	fi; \
-	dnf clean all; \
-	rm -rf /var/cache/dnf
-{{ ) end -}}
-{{ ) end -}}
 
 # verify Tomcat Native is working properly
 RUN set -eux; \
@@ -270,10 +159,4 @@ RUN set -eux; \
 	fi
 
 EXPOSE 8080
-{{ if vendor_variant | contains("temurin") then ( -}}
-
-# upstream eclipse-temurin-provided entrypoint script caused https://github.com/docker-library/tomcat/issues/77 to come back as https://github.com/docker-library/tomcat/issues/302; use "/entrypoint.sh" at your own risk
-ENTRYPOINT []
-
-{{ ) else "" end -}}
 CMD ["catalina.sh", "run"]

@@ -31,6 +31,7 @@ for javaVersion in 25 21 17 11 8; do
 	for vendorVariant in \
 		temurin-{noble,jammy} \
 		openjdk{,-slim}-{trixie,bookworm} \
+		corretto-al2023 \
 	; do
 		for javaVariant in {jdk,jre}"$javaVersion"; do
 			export variant="$javaVariant/$vendorVariant"

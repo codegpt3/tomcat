@@ -16,6 +16,10 @@ def is_supported_java_version(java):
 		java >= 8
 	end
 ;
+def is_apt:
+	# Amazon Linux images ("corretto-al2023") use "dnf" instead of "apt-get"
+	vendor_variant | contains("al2") | not
+;
 def is_native_ge_2:
 	# https://github.com/apache/tomcat-native/commit/f7930fa16f095717cfc641a8d24e60c343765adc
 	# https://github.com/docker-library/tomcat/pull/272
