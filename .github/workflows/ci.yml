@@ -1,11 +1,9 @@
 name: GitHub CI
 
+# The general-purpose matrix builds upstream variants (including non-Corretto images).
+# Keep it available for manual testing; automated publishing is Corretto-only.
 on:
-  pull_request:
-  push:
   workflow_dispatch:
-  schedule:
-    - cron: 0 0 * * 0
 
 defaults:
   run:
